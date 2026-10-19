@@ -237,6 +237,8 @@ async function loadProducts() {
 
         updateMetrics();
         renderProducts();
+        renderShopProducts();
+        renderCart();
 
         setApiStatus(true, "API connected");
     } catch (error) {
@@ -403,3 +405,349 @@ productRows.addEventListener("click", async event => {
 
 checkApiStatus();
 loadProducts();
+
+
+// SHOPPING CART AND SIMULATED CHECKOUT
+
+state.cart = [];
+state.pendingPayment = null;
+
+const shopProducts = document.getElementById("shopProducts");
+const cartItems = document.getElementById("cartItems");
+const cartCount = document.getElementById("cartCount");
+const cartTotal = document.getElementById("cartTotal");
+const checkoutForm = document.getElementById("checkoutForm");
+const checkoutButton = document.getElementById("checkoutButton");
+const checkoutMessage = document.getElementById("checkoutMessage");
+const paymentSimulation = document.getElementById("paymentSimulation");
+const paymentReference = document.getElementById("paymentReference");
+const simulatePaymentSuccess = document.getElementById("simulatePaymentSuccess");
+const simulatePaymentFailure = document.getElementById("simulatePaymentFailure");
+
+function showCheckoutMessage(message, type = "") {
+    checkoutMessage.textContent = message;
+    checkoutMessage.className = `checkout-message ${type}`.trim();
+}
+
+function getCartProduct(productId) {
+    return state.products.find(
+        product => String(product.id) === String(productId)
+    );
+}
+
+function renderShopProducts() {
+    if (!shopProducts) return;
+
+    if (state.products.length === 0) {
+        shopProducts.innerHTML =
+            '<p class="table-message">No products are available to shop.</p>';
+        return;
+    }
+
+    shopProducts.innerHTML = state.products.map(product => {
+        const id = escapeHtml(product.id);
+        const name = escapeHtml(product.name);
+        const sku = escapeHtml(product.sku);
+        const category = escapeHtml(product.category);
+        const price = formatCurrency(product.price);
+        const quantity = Number(product.quantity);
+        const inCart = state.cart.find(
+            item => String(item.productId) === String(product.id)
+        );
+        const available = quantity > 0;
+        const buttonText = !available
+            ? "Out of stock"
+            : inCart
+                ? "Add another"
+                : "Add to cart";
+
+        return `
+            <article class="shop-product-card">
+                <div class="shop-product-category">${category}</div>
+                <h3>${name}</h3>
+                <p class="shop-product-sku">SKU: ${sku}</p>
+                <p class="shop-product-price">${escapeHtml(price)}</p>
+                <p class="shop-product-stock">
+                    ${available
+                        ? `${quantity} in stock`
+                        : "Currently unavailable"}
+                </p>
+                <button type="button"
+                        class="button primary shop-add-button"
+                        data-shop-action="add"
+                        data-id="${id}"
+                        ${!available || (inCart && inCart.quantity >= quantity)
+                            ? "disabled"
+                            : ""}>
+                    ${inCart && inCart.quantity >= quantity
+                        ? "Maximum in cart"
+                        : buttonText}
+                </button>
+            </article>
+        `;
+    }).join("");
+}
+
+function renderCart() {
+    if (!cartItems) return;
+
+    let totalQuantity = 0;
+    let totalAmount = 0;
+
+    const validItems = state.cart.filter(item => getCartProduct(item.productId));
+    state.cart = validItems;
+
+    if (state.cart.length === 0) {
+        cartItems.innerHTML = '<p class="muted">Your cart is empty.</p>';
+    } else {
+        cartItems.innerHTML = state.cart.map(item => {
+            const product = getCartProduct(item.productId);
+            if (!product) return "";
+
+            const quantity = Number(item.quantity);
+            const available = Number(product.quantity);
+            const subtotal = Number(product.price) * quantity;
+
+            totalQuantity += quantity;
+            totalAmount += subtotal;
+
+            return `
+                <div class="cart-item">
+                    <div class="cart-item-details">
+                        <strong>${escapeHtml(product.name)}</strong>
+                        <span>${escapeHtml(formatCurrency(product.price))} each</span>
+                        <span class="cart-item-subtotal">
+                            ${escapeHtml(formatCurrency(subtotal))}
+                        </span>
+                    </div>
+                    <div class="cart-item-controls">
+                        <button type="button" class="quantity-button"
+                                data-cart-action="decrease"
+                                data-id="${escapeHtml(product.id)}"
+                                aria-label="Decrease ${escapeHtml(product.name)} quantity">
+                            −
+                        </button>
+                        <span>${quantity}</span>
+                        <button type="button" class="quantity-button"
+                                data-cart-action="increase"
+                                data-id="${escapeHtml(product.id)}"
+                                aria-label="Increase ${escapeHtml(product.name)} quantity"
+                                ${quantity >= available ? "disabled" : ""}>
+                            +
+                        </button>
+                        <button type="button" class="cart-remove-button"
+                                data-cart-action="remove"
+                                data-id="${escapeHtml(product.id)}">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    cartCount.textContent =
+        `${totalQuantity} ${totalQuantity === 1 ? "item" : "items"}`;
+    cartTotal.textContent = formatCurrency(totalAmount);
+
+    checkoutButton.disabled =
+        state.cart.length === 0 || state.pendingPayment !== null;
+
+    renderShopProducts();
+}
+
+shopProducts.addEventListener("click", event => {
+    const button = event.target.closest("button[data-shop-action]");
+    if (!button || button.disabled) return;
+
+    const product = getCartProduct(button.dataset.id);
+    if (!product) {
+        showCheckoutMessage("That product is no longer available.", "error");
+        return;
+    }
+
+    const available = Number(product.quantity);
+    if (available <= 0) {
+        showCheckoutMessage("This product is out of stock.", "error");
+        return;
+    }
+
+    const existing = state.cart.find(
+        item => String(item.productId) === String(product.id)
+    );
+
+    if (existing) {
+        if (existing.quantity >= available) {
+            showCheckoutMessage("You cannot add more than the available stock.", "error");
+            return;
+        }
+        existing.quantity += 1;
+    } else {
+        state.cart.push({
+            productId: product.id,
+            quantity: 1
+        });
+    }
+
+    showCheckoutMessage("", "");
+    renderCart();
+});
+
+cartItems.addEventListener("click", event => {
+    const button = event.target.closest("button[data-cart-action]");
+    if (!button) return;
+
+    const item = state.cart.find(
+        entry => String(entry.productId) === button.dataset.id
+    );
+    if (!item) return;
+
+    if (button.dataset.cartAction === "increase") {
+        const product = getCartProduct(item.productId);
+        if (product && item.quantity < Number(product.quantity)) {
+            item.quantity += 1;
+        }
+    } else if (button.dataset.cartAction === "decrease") {
+        item.quantity -= 1;
+        if (item.quantity <= 0) {
+            state.cart = state.cart.filter(entry => entry !== item);
+        }
+    } else if (button.dataset.cartAction === "remove") {
+        state.cart = state.cart.filter(entry => entry !== item);
+    }
+
+    renderCart();
+});
+
+checkoutForm.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    if (state.cart.length === 0) {
+        showCheckoutMessage("Add at least one product to your cart first.", "error");
+        return;
+    }
+
+    if (state.pendingPayment !== null) {
+        showCheckoutMessage(
+            "Finish the current payment simulation before placing another order.",
+            "error"
+        );
+        return;
+    }
+
+    const phoneNumber = document.getElementById("customerPhone").value.trim();
+
+    if (!/^(?:\+254|254|0)7\d{8}$/.test(phoneNumber)) {
+        showCheckoutMessage(
+            "Enter a valid Kenyan mobile number, such as 0712345678.",
+            "error"
+        );
+        return;
+    }
+
+    const orderBody = {
+        phoneNumber,
+        items: state.cart.map(item => ({
+            productId: Number(item.productId),
+            quantity: Number(item.quantity)
+        }))
+    };
+
+    checkoutButton.disabled = true;
+    checkoutButton.textContent = "Creating order...";
+    showCheckoutMessage("Submitting your order...", "");
+
+    try {
+        const order = await apiRequest("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(orderBody)
+        });
+
+        if (!order || !order.paymentReference) {
+            throw new Error("The server did not return a payment reference.");
+        }
+
+        state.pendingPayment = order;
+        paymentReference.textContent = order.paymentReference;
+        paymentSimulation.hidden = false;
+
+        showCheckoutMessage(
+            `Order #${order.orderId} created. Total: ${formatCurrency(order.totalAmount)}. Choose a simulated payment outcome below.`,
+            "success"
+        );
+
+        checkoutButton.textContent = "Payment pending";
+        checkoutButton.disabled = true;
+        simulatePaymentSuccess.disabled = false;
+        simulatePaymentFailure.disabled = false;
+    } catch (error) {
+        showCheckoutMessage(error.message, "error");
+        checkoutButton.disabled = false;
+        checkoutButton.textContent = "Place test order";
+    }
+});
+
+async function simulatePayment(success) {
+    const order = state.pendingPayment;
+    if (!order) return;
+
+    simulatePaymentSuccess.disabled = true;
+    simulatePaymentFailure.disabled = true;
+
+    showCheckoutMessage("Processing simulated payment...", "");
+
+    try {
+        const result = await apiRequest(
+            `/api/payments/simulate/${encodeURIComponent(order.paymentReference)}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ success })
+            }
+        );
+
+        state.pendingPayment = null;
+        paymentSimulation.hidden = true;
+
+        if (success && result.paymentStatus === "SUCCESS") {
+            state.cart = [];
+            showCheckoutMessage(
+                `Payment successful. Order #${order.orderId} is ${result.orderStatus}. Stock has been updated.`,
+                "success"
+            );
+            await loadProducts();
+        } else if (!success && result.paymentStatus === "FAILED") {
+            showCheckoutMessage(
+                `Payment failed for order #${order.orderId}. Stock was not deducted. Your cart is retained; placing another order creates a new payment reference.`,
+                "error"
+            );
+            renderCart();
+        } else {
+            showCheckoutMessage(
+                result.message || "The payment outcome was unexpected. Check the order status before retrying.",
+                "error"
+            );
+            await loadProducts();
+        }
+    } catch (error) {
+        simulatePaymentSuccess.disabled = false;
+        simulatePaymentFailure.disabled = false;
+        showCheckoutMessage(error.message, "error");
+    } finally {
+        checkoutButton.textContent = "Place test order";
+        checkoutButton.disabled =
+            state.cart.length === 0 || state.pendingPayment !== null;
+    }
+}
+
+simulatePaymentSuccess.addEventListener("click", () => {
+    simulatePayment(true);
+});
+
+simulatePaymentFailure.addEventListener("click", () => {
+    simulatePayment(false);
+});
+
+renderShopProducts();
+renderCart();

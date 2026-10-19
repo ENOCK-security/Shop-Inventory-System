@@ -58,6 +58,93 @@
             </article>
         </section>
 
+        <section class="shop-section" aria-labelledby="shopHeading">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">CUSTOMER SHOP</p>
+                    <h2 id="shopHeading">Shop products</h2>
+                    <p class="muted">Browse available stock and place a test order.</p>
+                </div>
+                <span class="environment-label">SIMULATED CHECKOUT</span>
+            </div>
+
+            <div class="shop-layout">
+                <section class="panel shop-catalogue">
+                    <div id="shopProducts" class="shop-products">
+                        <p class="table-message">Loading products...</p>
+                    </div>
+                </section>
+
+                <aside class="panel cart-panel">
+                    <div class="panel-heading">
+                        <p class="eyebrow">YOUR SELECTION</p>
+                        <h2>Shopping cart</h2>
+                        <p id="cartCount" class="muted">0 items</p>
+                    </div>
+
+                    <div id="cartItems" class="cart-items">
+                        <p class="muted">Your cart is empty.</p>
+                    </div>
+
+                    <div class="cart-total">
+                        <span>Total</span>
+                        <strong id="cartTotal">KES 0.00</strong>
+                    </div>
+
+                    <form id="checkoutForm">
+                        <div class="field">
+                            <label for="customerPhone">Customer phone number</label>
+                            <input
+                                id="customerPhone"
+                                name="customerPhone"
+                                type="tel"
+                                inputmode="tel"
+                                autocomplete="tel"
+                                placeholder="0712345678"
+                                pattern="(?:\+254|254|0)7[0-9]{8}"
+                                title="Enter a Kenyan mobile number, e.g. 0712345678"
+                                required>
+                            <small class="field-hint">
+                                Payment is simulated. No real M-Pesa request is sent.
+                            </small>
+                        </div>
+
+                        <button id="checkoutButton" class="button primary"
+                                type="submit" disabled>
+                            Place test order
+                        </button>
+                    </form>
+
+                    <div id="checkoutMessage" class="checkout-message"
+                         role="status" aria-live="polite"></div>
+
+                    <section id="paymentSimulation" class="payment-simulation"
+                             aria-labelledby="paymentHeading" hidden>
+                        <h3 id="paymentHeading">Simulate payment</h3>
+                        <p class="muted">
+                            Choose an outcome for this test transaction.
+                        </p>
+                        <p>
+                            Payment reference:
+                            <strong id="paymentReference"></strong>
+                        </p>
+                        <div class="payment-actions">
+                            <button id="simulatePaymentSuccess"
+                                    class="button primary" type="button">
+                                Simulate successful payment
+                            </button>
+                            <button id="simulatePaymentFailure"
+                                    class="button secondary" type="button">
+                                Simulate failed payment
+                            </button>
+                        </div>
+                    </section>
+
+                </aside>
+            </div>
+        </section>
+
+
         <section class="workspace">
             <section class="panel product-form-panel">
                 <div class="panel-heading">
