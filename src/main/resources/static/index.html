@@ -1,0 +1,177 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage products, inventory quantities and stock value.">
+    <title>Shop Inventory System</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Shop Inventory home">
+            <span class="brand-mark">SI</span>
+            <span class="brand-copy">
+                <strong>Shop Inventory</strong>
+                <small>Stock management</small>
+            </span>
+        </a>
+
+        <div class="connection">
+            <span id="apiDot" class="status-dot"></span>
+            <span id="apiStatus">Checking API...</span>
+        </div>
+    </header>
+
+    <main class="page">
+        <section class="page-heading">
+            <div>
+                <p class="eyebrow">INVENTORY MANAGEMENT</p>
+                <h1>Inventory overview</h1>
+                <p class="subtitle">Manage your products and keep track of your stock.</p>
+            </div>
+            <span class="environment-label">LOCAL DEVELOPMENT</span>
+        </section>
+
+        <div id="pageMessage" class="page-message" role="status"
+             aria-live="polite" hidden></div>
+
+        <section class="metrics" aria-label="Inventory summary">
+            <article class="metric-card">
+                <span class="metric-label">Products</span>
+                <strong id="metricProducts" class="metric-value">—</strong>
+                <span class="metric-footnote">Unique product records</span>
+            </article>
+
+            <article class="metric-card">
+                <span class="metric-label">Units in stock</span>
+                <strong id="metricUnits" class="metric-value">—</strong>
+                <span class="metric-footnote">Combined available quantity</span>
+            </article>
+
+            <article class="metric-card">
+                <span class="metric-label">Stock value</span>
+                <strong id="metricValue" class="metric-value">—</strong>
+                <span class="metric-footnote">Price multiplied by quantity</span>
+            </article>
+        </section>
+
+        <section class="workspace">
+            <section class="panel product-form-panel">
+                <div class="panel-heading">
+                    <p class="eyebrow">PRODUCT DETAILS</p>
+                    <h2 id="formHeading">Add a product</h2>
+                    <p id="formDescription" class="muted">
+                        Enter the details of a product to add it to your inventory.
+                    </p>
+                </div>
+
+                <form id="productForm">
+                    <div class="field">
+                        <label for="name">Product name</label>
+                        <input id="name" name="name" type="text"
+                               placeholder="e.g. Wireless Mouse"
+                               maxlength="100" required>
+                    </div>
+
+                    <div class="field">
+                        <label for="sku">SKU</label>
+                        <input id="sku" name="sku" type="text"
+                               placeholder="e.g. ELEC-MOUSE-001"
+                               maxlength="100" required>
+                        <small class="field-hint">Must be unique for each product.</small>
+                    </div>
+
+                    <div class="field">
+                        <label for="category">Category</label>
+                        <input id="category" name="category" type="text"
+                               placeholder="e.g. Electronics"
+                               maxlength="100" required>
+                    </div>
+
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="price">Unit price (KES)</label>
+                            <input id="price" name="price" type="number"
+                                   min="0.01" step="0.01"
+                                   placeholder="0.00" required>
+                        </div>
+
+                        <div class="field">
+                            <label for="quantity">Quantity</label>
+                            <input id="quantity" name="quantity" type="number"
+                                   min="0" step="1"
+                                   placeholder="0" required>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button id="submitButton" type="submit" class="button primary">
+                            Add product
+                        </button>
+                        <button id="cancelEdit" type="button"
+                                class="button secondary" hidden>
+                            Cancel
+                        </button>
+                    </div>
+
+                    <p id="formMessage" class="form-message"
+                       role="alert" aria-live="polite"></p>
+                </form>
+            </section>
+
+            <section class="panel inventory-panel">
+                <div class="inventory-heading">
+                    <div>
+                        <p class="eyebrow">YOUR CATALOGUE</p>
+                        <h2>Products</h2>
+                        <p class="muted">View and manage your inventory records.</p>
+                    </div>
+                    <span id="productCount" class="count-label">0 products</span>
+                </div>
+
+                <div class="search-box">
+                    <label class="visually-hidden" for="searchInput">
+                        Search products
+                    </label>
+                    <span aria-hidden="true" class="search-symbol">⌕</span>
+                    <input id="searchInput" type="search"
+                           placeholder="Search name, SKU or category...">
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th>Price</th>
+                                <th>Qty</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productRows">
+                            <tr>
+                                <td colspan="5" class="table-message">
+                                    Loading products...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="table-footnote">
+                    Changes are saved through the backend API to MySQL.
+                </p>
+            </section>
+        </section>
+
+        <footer class="footer">
+            <span>Shop Inventory System</span>
+            <span>Java · Spring Boot · MySQL</span>
+        </footer>
+    </main>
+</body>
+</html>
