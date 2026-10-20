@@ -1,4 +1,4 @@
-﻿package com.enock.shop_inventory_system.payment;
+package com.enock.shop_inventory_system.payment;
 
 import com.enock.shop_inventory_system.order.CustomerOrder;
 import com.enock.shop_inventory_system.order.CustomerOrderRepository;

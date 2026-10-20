@@ -5,7 +5,12 @@ const API_URL = "/api/products";
 
 const state = {
     products: [],
-    editingId: null
+    editingId: null,
+    adminAuthenticated: false,
+    csrfToken: null,
+    csrfHeaderName: null,
+    cart: [],
+    pendingPayment: null
 };
 
 const productForm = document.getElementById("productForm");
@@ -17,6 +22,15 @@ const formHeading = document.getElementById("formHeading");
 const formDescription = document.getElementById("formDescription");
 const submitButton = document.getElementById("submitButton");
 const cancelEditButton = document.getElementById("cancelEdit");
+
+const workspace = document.querySelector(".workspace");
+const adminLoginForm = document.getElementById("adminLoginForm");
+const adminUsernameInput = document.getElementById("adminUsername");
+const adminPasswordInput = document.getElementById("adminPassword");
+const adminLoginButton = document.getElementById("adminLoginButton");
+const adminLogoutButton = document.getElementById("adminLogoutButton");
+const adminAuthMessage = document.getElementById("adminAuthMessage");
+const adminAuthDescription = document.getElementById("adminAuthDescription");
 
 function formatCurrency(amount) {
     return new Intl.NumberFormat("en-KE", {
@@ -50,8 +64,44 @@ function setApiStatus(isOnline, message) {
     status.textContent = message;
 }
 
+async function refreshCsrfToken() {
+    const response = await fetch("/api/auth/csrf", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store"
+    });
+
+    if (!response.ok) {
+        throw new Error("Unable to obtain a security token. Refresh the page and try again.");
+    }
+
+    const data = await response.json();
+
+    if (!data.token || !data.headerName) {
+        throw new Error("The server returned an invalid security token response.");
+    }
+
+    state.csrfToken = data.token;
+    state.csrfHeaderName = data.headerName;
+}
+
 async function apiRequest(url, options = {}) {
-    const response = await fetch(url, options);
+    const requestOptions = { ...options };
+    const method = String(requestOptions.method || "GET").toUpperCase();
+    const headers = new Headers(requestOptions.headers || {});
+
+    requestOptions.credentials = "same-origin";
+    requestOptions.headers = headers;
+
+    if (!["GET", "HEAD", "OPTIONS", "TRACE"].includes(method)) {
+        if (!state.csrfToken || !state.csrfHeaderName) {
+            await refreshCsrfToken();
+        }
+
+        headers.set(state.csrfHeaderName, state.csrfToken);
+    }
+
+    const response = await fetch(url, requestOptions);
     const responseText = await response.text();
 
     let data = null;
@@ -77,12 +127,133 @@ async function apiRequest(url, options = {}) {
             message = data;
         }
 
+        if (response.status === 401) {
+            message = message || "Authentication is required or your session has expired.";
+        } else if (response.status === 403) {
+            message = message || "The request was forbidden. Your session or security token may need refreshing.";
+        }
+
         throw new Error(
             message || `Request failed with HTTP ${response.status}.`
         );
     }
 
     return data;
+}
+
+function setAdminAuthMessage(message, type = "") {
+    adminAuthMessage.textContent = message;
+    adminAuthMessage.className = `form-message ${type}`.trim();
+}
+
+function updateAdminUI() {
+    workspace.hidden = !state.adminAuthenticated;
+    adminLoginForm.hidden = state.adminAuthenticated;
+    adminLogoutButton.hidden = !state.adminAuthenticated;
+
+    adminAuthDescription.textContent = state.adminAuthenticated
+        ? "Signed in as administrator. Inventory changes and payment simulation are enabled."
+        : "Sign in to manage inventory and process simulated payments.";
+
+    if (!state.adminAuthenticated) {
+        clearForm();
+    }
+
+    renderProducts();
+
+    if (typeof paymentSimulation !== "undefined") {
+        paymentSimulation.hidden =
+            !state.adminAuthenticated || state.pendingPayment === null;
+
+        const paymentButtonsDisabled =
+            !state.adminAuthenticated || state.pendingPayment === null;
+
+        simulatePaymentSuccess.disabled = paymentButtonsDisabled;
+        simulatePaymentFailure.disabled = paymentButtonsDisabled;
+    }
+
+    if (state.adminAuthenticated && state.pendingPayment) {
+        paymentReference.textContent = state.pendingPayment.paymentReference;
+    }
+}
+
+async function initializeAdminSession() {
+    try {
+        await refreshCsrfToken();
+        await apiRequest("/api/admin/auth-check");
+        state.adminAuthenticated = true;
+    } catch {
+        state.adminAuthenticated = false;
+    }
+
+    updateAdminUI();
+}
+
+async function loginAdministrator(event) {
+    event.preventDefault();
+
+    adminLoginButton.disabled = true;
+    setAdminAuthMessage("Signing in...", "");
+
+    try {
+        if (!state.csrfToken || !state.csrfHeaderName) {
+            await refreshCsrfToken();
+        }
+
+        const formBody = new URLSearchParams({
+            username: adminUsernameInput.value.trim(),
+            password: adminPasswordInput.value
+        });
+
+        await apiRequest("/api/auth/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: formBody
+        });
+
+        adminPasswordInput.value = "";
+
+        // Spring Security may rotate the token after authentication.
+        await refreshCsrfToken();
+
+        state.adminAuthenticated = true;
+        setAdminAuthMessage("Administrator signed in successfully.", "success");
+        updateAdminUI();
+
+        await loadProducts();
+    } catch (error) {
+        adminPasswordInput.value = "";
+        setAdminAuthMessage(error.message, "error");
+    } finally {
+        adminLoginButton.disabled = false;
+    }
+}
+
+async function logoutAdministrator() {
+    adminLogoutButton.disabled = true;
+    setAdminAuthMessage("Signing out...", "");
+
+    try {
+        await apiRequest("/api/auth/logout", {
+            method: "POST"
+        });
+
+        state.adminAuthenticated = false;
+        state.csrfToken = null;
+        state.csrfHeaderName = null;
+
+        // Logout may clear the previous CSRF token.
+        await refreshCsrfToken();
+
+        setAdminAuthMessage("You have signed out.", "success");
+        updateAdminUI();
+    } catch (error) {
+        setAdminAuthMessage(error.message, "error");
+    } finally {
+        adminLogoutButton.disabled = false;
+    }
 }
 
 function showFormMessage(message, type) {
@@ -191,6 +362,23 @@ function renderProducts() {
             quantityClass = "low-stock";
         }
 
+        const actions = state.adminAuthenticated ? `
+            <div class="row-actions">
+                <button type="button"
+                        class="action-button"
+                        data-action="edit"
+                        data-id="${id}">
+                    Edit
+                </button>
+                <button type="button"
+                        class="action-button delete"
+                        data-action="delete"
+                        data-id="${id}">
+                    Delete
+                </button>
+            </div>
+        ` : "";
+
         return `
             <tr>
                 <td>
@@ -204,22 +392,7 @@ function renderProducts() {
                         ${quantity.toLocaleString("en-KE")}
                     </span>
                 </td>
-                <td>
-                    <div class="row-actions">
-                        <button type="button"
-                                class="action-button"
-                                data-action="edit"
-                                data-id="${id}">
-                            Edit
-                        </button>
-                        <button type="button"
-                                class="action-button delete"
-                                data-action="delete"
-                                data-id="${id}">
-                            Delete
-                        </button>
-                    </div>
-                </td>
+                <td>${actions}</td>
             </tr>
         `;
     }).join("");
@@ -409,8 +582,7 @@ loadProducts();
 
 // SHOPPING CART AND SIMULATED CHECKOUT
 
-state.cart = [];
-state.pendingPayment = null;
+
 
 const shopProducts = document.getElementById("shopProducts");
 const cartItems = document.getElementById("cartItems");
@@ -670,17 +842,19 @@ checkoutForm.addEventListener("submit", async event => {
 
         state.pendingPayment = order;
         paymentReference.textContent = order.paymentReference;
-        paymentSimulation.hidden = false;
+        paymentSimulation.hidden = !state.adminAuthenticated;
 
         showCheckoutMessage(
-            `Order #${order.orderId} created. Total: ${formatCurrency(order.totalAmount)}. Choose a simulated payment outcome below.`,
+            state.adminAuthenticated
+                ? `Order #${order.orderId} created. Total: ${formatCurrency(order.totalAmount)}. Choose a simulated payment outcome below.`
+                : `Order #${order.orderId} created. Total: ${formatCurrency(order.totalAmount)}. The order is pending; an administrator must sign in to process the simulated payment.`,
             "success"
         );
 
         checkoutButton.textContent = "Payment pending";
         checkoutButton.disabled = true;
-        simulatePaymentSuccess.disabled = false;
-        simulatePaymentFailure.disabled = false;
+        simulatePaymentSuccess.disabled = !state.adminAuthenticated;
+        simulatePaymentFailure.disabled = !state.adminAuthenticated;
     } catch (error) {
         showCheckoutMessage(error.message, "error");
         checkoutButton.disabled = false;
@@ -690,6 +864,12 @@ checkoutForm.addEventListener("submit", async event => {
 
 async function simulatePayment(success) {
     const order = state.pendingPayment;
+
+    if (!state.adminAuthenticated) {
+        showCheckoutMessage("An administrator must sign in to process simulated payments.", "error");
+        return;
+    }
+
     if (!order) return;
 
     simulatePaymentSuccess.disabled = true;
@@ -751,3 +931,8 @@ simulatePaymentFailure.addEventListener("click", () => {
 
 renderShopProducts();
 renderCart();
+
+adminLoginForm.addEventListener("submit", loginAdministrator);
+adminLogoutButton.addEventListener("click", logoutAdministrator);
+
+initializeAdminSession();

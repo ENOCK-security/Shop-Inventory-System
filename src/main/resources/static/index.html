@@ -145,7 +145,48 @@
         </section>
 
 
-        <section class="workspace">
+        <section class="panel admin-auth-panel"
+                 aria-labelledby="adminAuthHeading">
+            <div class="panel-heading">
+                <p class="eyebrow">ADMINISTRATION</p>
+                <h2 id="adminAuthHeading">Administrator access</h2>
+                <p class="muted" id="adminAuthDescription">
+                    Sign in to manage inventory and process simulated payments.
+                </p>
+            </div>
+
+            <form id="adminLoginForm">
+                <div class="field">
+                    <label for="adminUsername">Username</label>
+                    <input id="adminUsername" name="username"
+                           type="text" autocomplete="username"
+                           required maxlength="100">
+                </div>
+
+                <div class="field">
+                    <label for="adminPassword">Password</label>
+                    <input id="adminPassword" name="password"
+                           type="password" autocomplete="current-password"
+                           required>
+                </div>
+
+                <div class="form-actions">
+                    <button id="adminLoginButton"
+                            class="button primary" type="submit">
+                        Sign in
+                    </button>
+                    <button id="adminLogoutButton"
+                            class="button" type="button" hidden>
+                        Sign out
+                    </button>
+                </div>
+
+                <p id="adminAuthMessage"
+                   class="form-message"
+                   role="status" aria-live="polite"></p>
+            </form>
+        </section>
+        <section class="workspace" hidden>
             <section class="panel product-form-panel">
                 <div class="panel-heading">
                     <p class="eyebrow">PRODUCT DETAILS</p>

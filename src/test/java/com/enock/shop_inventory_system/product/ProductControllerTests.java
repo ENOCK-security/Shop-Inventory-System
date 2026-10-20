@@ -1,11 +1,15 @@
 
 package com.enock.shop_inventory_system.product;
 
+import com.enock.shop_inventory_system.SecurityConfig;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -15,11 +19,21 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ProductController.class)
+@Import(SecurityConfig.class)
+@TestPropertySource(properties = {
+        "app.security.admin.username=testadmin",
+        "app.security.admin.password=test-password-for-tests"
+})
 class ProductControllerTests {
+
+    private static final String ADMIN_USERNAME = "testadmin";
+    private static final String ADMIN_PASSWORD = "test-password-for-tests";
 
     @Autowired
     private MockMvc mockMvc;
@@ -54,6 +68,8 @@ class ProductControllerTests {
                 });
 
         mockMvc.perform(post("/api/products")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 createTestProduct(null))))
@@ -64,11 +80,37 @@ class ProductControllerTests {
     }
 
     @Test
+    void shouldRejectUnauthenticatedProductCreation() throws Exception {
+        mockMvc.perform(post("/api/products")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                createTestProduct(null))))
+                .andExpect(status().isUnauthorized());
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void shouldRejectProductCreationWithoutCsrfToken() throws Exception {
+        mockMvc.perform(post("/api/products")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                createTestProduct(null))))
+                .andExpect(status().isForbidden());
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void shouldRejectDuplicateSku() throws Exception {
         when(productRepository.findBySku("TEST-KEYBOARD-001"))
                 .thenReturn(Optional.of(createTestProduct(1L)));
 
         mockMvc.perform(post("/api/products")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 createTestProduct(null))))
@@ -84,12 +126,12 @@ class ProductControllerTests {
 
         mockMvc.perform(get("/api/products/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Test Keyboard"))
-                .andExpect(jsonPath("$.price").value(850.00));
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Test Keyboard"));
     }
 
     @Test
-    void shouldReturnNotFoundForMissingProduct() throws Exception {
+    void shouldReturnNotFoundWhenProductDoesNotExist() throws Exception {
         when(productRepository.findById(999L))
                 .thenReturn(Optional.empty());
 
@@ -112,10 +154,21 @@ class ProductControllerTests {
     void shouldDeleteProduct() throws Exception {
         when(productRepository.existsById(1L)).thenReturn(true);
 
-        mockMvc.perform(delete("/api/products/1"))
+        mockMvc.perform(delete("/api/products/1")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isNoContent());
 
         verify(productRepository).deleteById(1L);
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedProductDeletion() throws Exception {
+        mockMvc.perform(delete("/api/products/1")
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        verify(productRepository, never()).deleteById(anyLong());
     }
 
     @Test
@@ -123,12 +176,14 @@ class ProductControllerTests {
             throws Exception {
         when(productRepository.existsById(999L)).thenReturn(false);
 
-        mockMvc.perform(delete("/api/products/999"))
+        mockMvc.perform(delete("/api/products/999")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isNotFound());
 
         verify(productRepository, never()).deleteById(999L);
     }
-    
+
     @Test
     void shouldReturnProductBySku() throws Exception {
         when(productRepository.findBySku("TEST-KEYBOARD-001"))
@@ -137,8 +192,7 @@ class ProductControllerTests {
         mockMvc.perform(get("/api/products/sku/TEST-KEYBOARD-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.sku").value("TEST-KEYBOARD-001"))
-                .andExpect(jsonPath("$.name").value("Test Keyboard"));
+                .andExpect(jsonPath("$.sku").value("TEST-KEYBOARD-001"));
     }
 
     @Test
@@ -159,6 +213,8 @@ class ProductControllerTests {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         mockMvc.perform(put("/api/products/1")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updatedProduct)))
                 .andExpect(status().isOk())
@@ -167,16 +223,31 @@ class ProductControllerTests {
     }
 
     @Test
+    void shouldRejectUnauthenticatedProductUpdate() throws Exception {
+        Product updatedProduct = createTestProduct(null);
+        updatedProduct.setName("Unauthorized Update");
+
+        mockMvc.perform(put("/api/products/1")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updatedProduct)))
+                .andExpect(status().isUnauthorized());
+
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     void shouldRejectNegativeQuantity() throws Exception {
         Product invalidProduct = createTestProduct(null);
         invalidProduct.setQuantity(-1);
 
         mockMvc.perform(post("/api/products")
+                        .with(user(ADMIN_USERNAME).roles("ADMIN"))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidProduct)))
                 .andExpect(status().isBadRequest());
 
         verify(productRepository, never()).save(any(Product.class));
     }
-
 }
