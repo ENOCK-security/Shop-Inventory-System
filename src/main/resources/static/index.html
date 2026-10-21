@@ -41,19 +41,19 @@
         <section class="metrics" aria-label="Inventory summary">
             <article class="metric-card">
                 <span class="metric-label">Products</span>
-                <strong id="metricProducts" class="metric-value">—</strong>
+                <strong id="metricProducts" class="metric-value">â€”</strong>
                 <span class="metric-footnote">Unique product records</span>
             </article>
 
             <article class="metric-card">
                 <span class="metric-label">Units in stock</span>
-                <strong id="metricUnits" class="metric-value">—</strong>
+                <strong id="metricUnits" class="metric-value">â€”</strong>
                 <span class="metric-footnote">Combined available quantity</span>
             </article>
 
             <article class="metric-card">
                 <span class="metric-label">Stock value</span>
-                <strong id="metricValue" class="metric-value">—</strong>
+                <strong id="metricValue" class="metric-value">â€”</strong>
                 <span class="metric-footnote">Price multiplied by quantity</span>
             </article>
         </section>
@@ -175,16 +175,19 @@
                             class="button primary" type="submit">
                         Sign in
                     </button>
-                    <button id="adminLogoutButton"
-                            class="button" type="button" hidden>
-                        Sign out
-                    </button>
                 </div>
 
                 <p id="adminAuthMessage"
                    class="form-message"
                    role="status" aria-live="polite"></p>
             </form>
+
+            <div class="form-actions">
+                <button id="adminLogoutButton"
+                        class="button" type="button" hidden>
+                    Sign out
+                </button>
+            </div>
         </section>
         <section class="workspace" hidden>
             <section class="panel product-form-panel">
@@ -264,7 +267,7 @@
                     <label class="visually-hidden" for="searchInput">
                         Search products
                     </label>
-                    <span aria-hidden="true" class="search-symbol">⌕</span>
+                    <span aria-hidden="true" class="search-symbol">âŒ•</span>
                     <input id="searchInput" type="search"
                            placeholder="Search name, SKU or category...">
                 </div>
@@ -298,7 +301,7 @@
 
         <footer class="footer">
             <span>Shop Inventory System</span>
-            <span>Java · Spring Boot · MySQL</span>
+            <span>Java Â· Spring Boot Â· MySQL</span>
         </footer>
     </main>
 </body>
